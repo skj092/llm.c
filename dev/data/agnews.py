@@ -3,6 +3,7 @@ import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from tqdm import tqdm  # Import tqdm for progress bars
+import os
 
 # Load dataset
 dataset = load_dataset("ag_news")
@@ -39,16 +40,17 @@ for split in dataset.keys():
 for split in ["train", "test"]:
     print(f"Saving {split} dataset...")
 
-    input_ids = np.array([x["input_ids"] for x in tqdm(
-        dataset[split], desc="Input IDs")], dtype=np.int32)
-    attention_masks = np.array([x["attention_mask"] for x in tqdm(
-        dataset[split], desc="Attention Masks")], dtype=np.int32)
+    # input_ids = np.array([x["input_ids"] for x in tqdm(
+    #     dataset[split], desc="Input IDs")], dtype=np.int32)
+    # attention_masks = np.array([x["attention_mask"] for x in tqdm(
+    #     dataset[split], desc="Attention Masks")], dtype=np.int32)
     labels = np.array([x["label"] for x in tqdm(
         dataset[split], desc="Labels")], dtype=np.int64)
 
     # Save each component separately
-    input_ids.tofile(f"ag_news_{split}_input_ids.bin")
-    attention_masks.tofile(f"ag_news_{split}_attention_masks.bin")
-    labels.tofile(f"ag_news_{split}_labels.bin")
+    os.mkdir('ag-news')
+    input_ids.tofile(f"ag-news/ag_news_{split}_input_ids.bin")
+    attention_masks.tofile(f"ag-news/ag_news_{split}_attention_masks.bin")
+    labels.tofile(f"ag-news/ag_news_{split}_labels.bin")
 
 print("✅ Saved dataset as raw .bin files!")
