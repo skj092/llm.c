@@ -34,3 +34,4 @@ dev/cuda/global_norm
 
 # log files
 *.log
+*.pyc
