@@ -9,6 +9,9 @@ from dataclasses import dataclass
 import numpy as np
 import torch.nn as nn
 from transformers.modeling_utils import dtype_byte_size
+import math
+import torch.nn.functional as F
+from transformers.models.bert.modeling_bert import BertSdpaSelfAttention
 
 
 def set_seed(seed):
@@ -24,6 +27,7 @@ set_seed(42)
 
 @dataclass
 class BertConfig:
+    is_decoder: bool = False
     vocab_size: int = 30522
     hidden_size: int = 768
     num_hidden_layers: int = 12
@@ -48,12 +52,14 @@ bert_base.eval()
 #     'bert-base-uncased', num_labels=num_classes)
 
 
-class BertLayer(nn.Module):
-    pass
-
-
 class BertPooler(nn.Module):
     pass
+
+
+class BertLayer(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.attention = BertSdpaSelfAttention(config)
 
 
 class BertEmbeddings(nn.Module):
@@ -138,3 +144,29 @@ def generate_random_input(batch_size=2, seq_length=128, vocab_size=30522):
     attention_mask = torch.ones_like(input_ids)
     token_type_ids = torch.zeros_like(input_ids)
     return input_ids, attention_mask, token_type_ids
+
+
+config = BertConfig()
+# input_ids, _, token_type_ids = generate_random_input()
+# emb = BertEmbeddings(config).load_from_pretrained()
+# emb.eval()
+#
+#
+# temp1 = bert_base.embeddings(
+#     input_ids=input_ids, token_type_ids=token_type_ids)
+# temp2 = emb(input_ids, token_type_ids)
+# assert torch.allclose(temp1, temp2, atol=1e-6), "❌ Word Embeddings Mismatch!"
+#
+# sa_m = BertSdpaSelfAttention(config)
+# # sa_m.load_from_pretrained()
+# sa_m.eval()
+#
+# sa = bert_base.encoder.layer[0].attention.self
+# out1 = sa(temp1)[0]
+# out2 = sa_m(temp1)
+# print(out1)
+# print('*'*50)
+# print(out2)
+#
+# assert torch.allclose(out1, out2, atol=1e-6), "❌ Word Embeddings Mismatch!"
+# print("✅ Word Embeddings Match! 🎉")

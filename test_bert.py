@@ -85,7 +85,39 @@ class TestBertEmbeddings:
         print("✅ Combined Embeddings Match! 💯")
 
 
+class TestBertEncoder:
+    """🧪 Test class for verifying BERT embedding layers."""
+
+    def setup_method(self):
+        """⚙️ Setup before each test: Load custom BERT embeddings."""
+        self.config = BertConfig()
+        self.input_ids, _, self.token_type_ids = generate_random_input()
+
+        # Initialize custom BERT embeddings
+        self.emb = BertEmbeddings(self.config).load_from_pretrained()
+        self.emb.eval()
+
+    def test_word_embeddings_1(self):
+        """📝 Test: Word embeddings match the pre-trained BERT model."""
+        self.we_fm = bert_base.embeddings.word_embeddings(self.input_ids)
+        self.we_sm = self.emb.word_embeddings(self.input_ids)
+
+        assert torch.allclose(
+            self.we_fm, self.we_sm, atol=1e-6), "❌ Word Embeddings Mismatch!"
+        print("✅ Word Embeddings Match! 🎉")
+
+    def test_word_encoder1(self):
+        """📝 Test: Word embeddings match the pre-trained BERT model."""
+        encoder_hf = bert_base.encoder.layer[0]
+        temp1 = encoder_hf(self.we_fm)
+
+        # temp2 = self.emb.word_embeddings(self.input_ids)
+
+        # assert torch.allclose(
+        #     temp1, temp2, atol=1e-6), "❌ Word Embeddings Mismatch!"
+        # print("✅ Word Embeddings Match! 🎉")
+
+
 if __name__ == "__main__":
     print("\n🔍 Running BERT Embedding Tests... 🚀\n")
     pytest.main(["-v", "--tb=short"])
-
