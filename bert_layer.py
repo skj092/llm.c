@@ -1,3 +1,4 @@
+import pdb
 from transformers import BertModel
 from bert_dev import (BertEmbeddings, BertAttention, config,
                       BertSelfOutput, bert_base, BertIntermediate, BertOutput)
@@ -17,7 +18,7 @@ def set_seed(seed):
 set_seed(42)
 
 
-class BertEncoder(nn.Module):
+class BertLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.attention = BertAttention(config)
@@ -42,6 +43,25 @@ class BertEncoder(nn.Module):
         return outputs
 
 
+class BertEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.layer = nn.ModuleList(BertLayer(config) for _ in range(12))
+
+    def load_from_pretrained(self):
+        hf_enc = bert_base.encoder
+        hf_enc_sd = hf_enc.state_dict()
+
+        for k in hf_enc_sd.keys():
+            self.state_dict()[k].copy_(hf_enc_sd[k])
+        return self
+
+    def forward(self, hidden_state):
+        for l in self.layer:
+            hidden_state = l(hidden_state)[0]
+        print(hidden_state)
+        return hidden_state
+
 
 hidden_state = torch.rand(2, 768, 768)
 # # custom model
@@ -50,9 +70,10 @@ bi_s.eval()
 out1 = bi_s(hidden_state)
 # #
 # # hf  model
-sa = bert_base.encoder.layer[0]
+sa = bert_base.encoder
 sa.eval()
-out2 = sa.forward(hidden_state)
+out2 = sa.forward(hidden_state).last_hidden_state
+# import pdb; pdb.set_trace()
 
-
-assert torch.allclose(out1[0], out2[0], atol=1e-5), "❌ self attention  Mismatch!"
+assert torch.allclose(
+    out1, out2, atol=1e-4), "❌ self attention  Mismatch!"
