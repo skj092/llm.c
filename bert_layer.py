@@ -42,7 +42,7 @@ class BertEncoder(nn.Module):
         super().__init__()
         self.attention = BertAttention(config)
         self.intermediate = BertIntermediate(config)
-        self.output = BertSelfOutput(config)
+        self.output = BertOutput(config)
 
     def load_from_pretrained(self):
         hf_enc = bert_base.encoder.layer[0].intermediate
@@ -60,15 +60,48 @@ class BertEncoder(nn.Module):
         pass
 
 
-input = torch.rand(2, 129, 768)
+class BertOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+    def load_from_pretrained(self):
+        hf_m = bert_base.encoder.layer[0].output
+        hf_m_sd = hf_m.state_dict()
+
+        for k in hf_m_sd.keys():
+            print(f"Copying {k}")
+            self.state_dict()[k].copy_(hf_m_sd[k])
+        return self
+
+
+input = torch.rand(2, 768, 3072)
+hidden_state = torch.rand(768, 768)
+# hidden_state = torch.rand(768, 129)
+
+# dense: 3072, 768
+# layernorm(dropout(dense(hidden_state)) + input_tensor)
+
 
 #
 # # custom model
-bi_s = BertIntermediate(config).load_from_pretrained()
-out1 = bi_s(input)[0]
-#
+bi_s= BertOutput(config).load_from_pretrained()
+bi_s.eval()
+out1= bi_s(input, hidden_state)
+# #
 # # hf  model
-sa = bert_base.encoder.layer[0].intermediate
-out2 = sa.forward(input)[0]
+sa= bert_base.encoder.layer[0].output
+sa.eval()
+out2 = sa.forward(input, hidden_state)
+
 
 assert torch.allclose(out1, out2, atol=1e-5), "❌ self attention  Mismatch!"
