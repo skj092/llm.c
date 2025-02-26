@@ -1,10 +1,11 @@
+from os import confstr_names
 import pdb
-from transformers import BertModel
-from bert_dev import (BertEmbeddings, BertAttention, config,
-                      BertSelfOutput, bert_base, BertIntermediate, BertOutput)
 import torch
 import numpy as np
 import torch.nn as nn
+from transformers import BertModel
+from bert_dev import (config, BertAttention, BertOutput,
+                      BertIntermediate, bert_base, BertEncoder, BertLayer, BertEmbeddings, BertPooler)
 
 
 def set_seed(seed):
@@ -18,62 +19,27 @@ def set_seed(seed):
 set_seed(42)
 
 
-class BertLayer(nn.Module):
+class BertModelCustom(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.attention = BertAttention(config)
-        self.intermediate = BertIntermediate(config)
-        self.output = BertOutput(config)
+        self.embeddings = BertEmbeddings(config)
+        self.encoder = BertEncoder(config)
+        self.pooler = BertPooler(config)
 
     def load_from_pretrained(self):
-        hf_enc = bert_base.encoder.layer[0]
-        hf_enc_sd = hf_enc.state_dict()
+        hf_sd = bert_base.state_dict()
 
-        for k in hf_enc_sd.keys():
-            self.state_dict()[k].copy_(hf_enc_sd[k])
+        for k in hf_sd.keys():
+            print(f"Copying {k}")
+            self.state_dict()[k].copy_(hf_sd[k])
         return self
 
-    def forward(self, hidden_state):
-        attn_out = self.attention(hidden_state)
-        extra_outputs = attn_out[1:]
-        intermediate = self.intermediate(attn_out[0])
-        layer_output = self.output(intermediate, attn_out[0])
-        outputs = (layer_output,) + extra_outputs
-
-        return outputs
+    def forward(self):
+        pass
 
 
-class BertEncoder(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.layer = nn.ModuleList(BertLayer(config) for _ in range(12))
+hidden_state = torch.rand(2, 128, 768)
 
-    def load_from_pretrained(self):
-        hf_enc = bert_base.encoder
-        hf_enc_sd = hf_enc.state_dict()
-
-        for k in hf_enc_sd.keys():
-            self.state_dict()[k].copy_(hf_enc_sd[k])
-        return self
-
-    def forward(self, hidden_state):
-        for l in self.layer:
-            hidden_state = l(hidden_state)[0]
-        print(hidden_state)
-        return hidden_state
-
-
-hidden_state = torch.rand(2, 768, 768)
-# # custom model
-bi_s = BertEncoder(config).load_from_pretrained()
-bi_s.eval()
-out1 = bi_s(hidden_state)
-# #
-# # hf  model
-sa = bert_base.encoder
-sa.eval()
-out2 = sa.forward(hidden_state).last_hidden_state
-# import pdb; pdb.set_trace()
-
-assert torch.allclose(
-    out1, out2, atol=1e-4), "❌ self attention  Mismatch!"
+model = BertModelCustom(config).load_from_pretrained()
+model.eval()
+pdb.set_trace()

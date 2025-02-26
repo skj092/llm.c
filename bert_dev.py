@@ -52,16 +52,6 @@ bert_base.eval()
 #     'bert-base-uncased', num_labels=num_classes)
 
 
-class BertPooler(nn.Module):
-    pass
-
-
-class BertLayer(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.attention = BertSdpaSelfAttention(config)
-
-
 class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -325,4 +315,60 @@ class BertAttention(nn.Module):
         return emb
 
 
-config = BertConfig()
+class BertLayer(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.attention = BertAttention(config)
+        self.intermediate = BertIntermediate(config)
+        self.output = BertOutput(config)
+
+    def load_from_pretrained(self):
+        hf_enc = bert_base.encoder.layer[0]
+        hf_enc_sd = hf_enc.state_dict()
+
+        for k in hf_enc_sd.keys():
+            self.state_dict()[k].copy_(hf_enc_sd[k])
+        return self
+
+    def forward(self, hidden_state):
+        attn_out = self.attention(hidden_state)
+        extra_outputs = attn_out[1:]
+        intermediate = self.intermediate(attn_out[0])
+        layer_output = self.output(intermediate, attn_out[0])
+        outputs = (layer_output,) + extra_outputs
+
+        return outputs
+
+
+class BertEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.layer = nn.ModuleList(BertLayer(config) for _ in range(12))
+
+    def load_from_pretrained(self):
+        hf_enc = bert_base.encoder
+        hf_enc_sd = hf_enc.state_dict()
+
+        for k in hf_enc_sd.keys():
+            self.state_dict()[k].copy_(hf_enc_sd[k])
+        return self
+
+    def forward(self, hidden_state):
+        for l in self.layer:
+            hidden_state = l(hidden_state)[0]
+        return hidden_state
+
+
+class BertPooler(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = hidden_states[:, 0]
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
