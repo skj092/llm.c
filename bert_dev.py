@@ -190,6 +190,79 @@ class BertSelfAttention(nn.Module):
         return (context, )
 
 
+class BertOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+    def load_from_pretrained(self):
+        config = BertConfig()
+        emb = BertAttention(config)
+        sd = emb.state_dict()
+
+        hf_sd = bert_base.encoder.layer[0].output.state_dict()
+
+        for key in hf_sd.keys():
+            print(f"Copying {key}")
+            assert hf_sd[key].shape == sd[
+                key].shape, f"Shape mismatch for {key}"
+
+            with torch.no_grad():
+                sd[key].copy_(hf_sd[key])
+        return emb
+
+
+class BertIntermediate(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.intermediate_act_fn = nn.GELU()
+
+    def load_from_pretrained(self):
+        hf_bi = bert_base.encoder.layer[0].intermediate
+        hf_bi_sd = hf_bi.state_dict()
+        for k in hf_bi_sd.keys():
+            self.state_dict()[k].copy_(hf_bi_sd[k])
+        return self
+
+    def forward(self, xb):
+        xb = self.dense(xb)
+        out = self.intermediate_act_fn(xb)
+        return out
+
+
+class BertOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+    def load_from_pretrained(self):
+        hf_m = bert_base.encoder.layer[0].output
+        hf_m_sd = hf_m.state_dict()
+
+        for k in hf_m_sd.keys():
+            print(f"Copying {k}")
+            self.state_dict()[k].copy_(hf_m_sd[k])
+        return self
+
 
 class BertSelfOutput(nn.Module):
     def __init__(self, config):
@@ -221,6 +294,7 @@ class BertSelfOutput(nn.Module):
                 sd[key].copy_(hf_sd[key])
         return emb
 
+
 class BertAttention(nn.Module):
     def __init__(self, config, hidden_size=768, num_heads=12, dropout=0.1):
         super().__init__()
@@ -231,7 +305,6 @@ class BertAttention(nn.Module):
         self_outputs = self.self(x)
         attention_output = self.output(self_outputs[0], x)
         outputs = (attention_output,) + self_outputs[1:]
-        print(outputs[0][0][:10])
 
         return outputs
 
@@ -253,4 +326,3 @@ class BertAttention(nn.Module):
 
 
 config = BertConfig()
-
