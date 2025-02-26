@@ -1,5 +1,6 @@
 import torch
 from bert_dev import BertEmbeddings, BertConfig
+from bert_layer import BertAttention
 from transformers import BertModel
 import numpy as np
 import pytest
@@ -91,31 +92,25 @@ class TestBertEncoder:
     def setup_method(self):
         """⚙️ Setup before each test: Load custom BERT embeddings."""
         self.config = BertConfig()
-        self.input_ids, _, self.token_type_ids = generate_random_input()
 
         # Initialize custom BERT embeddings
-        self.emb = BertEmbeddings(self.config).load_from_pretrained()
+        self.emb = BertAttention(self.config).load_from_pretrained()
         self.emb.eval()
 
-    def test_word_embeddings_1(self):
-        """📝 Test: Word embeddings match the pre-trained BERT model."""
-        self.we_fm = bert_base.embeddings.word_embeddings(self.input_ids)
-        self.we_sm = self.emb.word_embeddings(self.input_ids)
+        # Pretrained model
+        self.hf_attention_0 = bert_base.encoder.layer[0].attention
+
+    def test_attention_layer_0(self):
+        """📝 Test: Token type embeddings match the pre-trained BERT model."""
+        input = torch.rand(2, 128, 768)
+
+        temp1 = self.emb(input)
+
+        temp2 = self.hf_attention_0(input)
 
         assert torch.allclose(
-            self.we_fm, self.we_sm, atol=1e-6), "❌ Word Embeddings Mismatch!"
-        print("✅ Word Embeddings Match! 🎉")
-
-    def test_word_encoder1(self):
-        """📝 Test: Word embeddings match the pre-trained BERT model."""
-        encoder_hf = bert_base.encoder.layer[0]
-        temp1 = encoder_hf(self.we_fm)
-
-        # temp2 = self.emb.word_embeddings(self.input_ids)
-
-        # assert torch.allclose(
-        #     temp1, temp2, atol=1e-6), "❌ Word Embeddings Mismatch!"
-        # print("✅ Word Embeddings Match! 🎉")
+            temp1[0], temp2[0], atol=1e-5), "❌ Attention output Mismatch!"
+        print("✅ Attention output Match! 🚀")
 
 
 if __name__ == "__main__":
