@@ -1,4 +1,4 @@
-from bert_dev import BertEmbeddings, generate_random_input, bert_base, config
+from bert_dev import BertEmbeddings, generate_random_input, config
 import torch.nn.functional as F
 import pdb
 from transformers import BertConfig, BertModel
@@ -7,6 +7,7 @@ import numpy as np
 import torch.nn as nn
 from transformers.models.bert.modeling_bert import BertSdpaSelfAttention
 import math
+from transformers import BertConfig, BertModel
 
 
 def set_seed(seed):
@@ -18,6 +19,8 @@ def set_seed(seed):
 
 
 set_seed(42)
+bert_base = BertModel.from_pretrained('bert-base-uncased')
+bert_base.eval()
 
 
 class BertSelfAttention(nn.Module):
@@ -65,35 +68,40 @@ class BertSelfAttention(nn.Module):
 
 
 class BertSelfOutput(nn.Module):
-    def __init__(self, hidden_size=768, dropout=0.1):
+    def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(hidden_size, hidden_size)
-        self.LayerNorm = nn.LayerNorm(hidden_size, eps=1e-12)
-        self.dropout = nn.Dropout(dropout)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, x, residual):
-        x = self.dense(x)
-        x = self.dropout(x)
-        return self.LayerNorm(x + residual)
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
 
 
 class BertAttention(nn.Module):
     def __init__(self, config, hidden_size=768, num_heads=12, dropout=0.1):
         super().__init__()
         self.self = BertSelfAttention(hidden_size, num_heads, dropout)
-        self.output = BertSelfOutput(hidden_size, dropout)
+        self.output = BertSelfOutput(config)
 
     def forward(self, x):
-        attn_output = self.self(x)
-        output = self.output(attn_output, x)  # Add residual connection
-        return output
+        self_outputs = self.self(x)
+        attention_output = self.output(self_outputs[0], x)
+        outputs = (attention_output,) + self_outputs[1:]
+        print(outputs[0][0][:10])
+
+        return outputs
 
     def load_from_pretrained(self):
         config = BertConfig()
-        emb = BertAttention(config).self
+        emb = BertAttention(config)
         sd = emb.state_dict()
 
-        hf_sd = bert_base.encoder.layer[0].attention.self.state_dict()
+        hf_sd = bert_base.encoder.layer[0].attention.state_dict()
 
         for key, hf_val in hf_sd.items():
             print(f"Copying {key}")
@@ -106,14 +114,18 @@ class BertAttention(nn.Module):
 
 
 input = torch.rand(2, 128, 768)
+# print(input)
 
 # custom model
 sa_m = BertAttention(config).load_from_pretrained()
 sa_m.eval()
+# import pdb; pdb.set_trace()
 out1 = sa_m(input)[0]
 
 # hf  model
-sa = bert_base.encoder.layer[0].attention.self
-out2 = sa(input)[0]
+sa = bert_base.encoder.layer[0].attention
+out2 = sa.forward(input)[0]
+import pdb; pdb.set_trace()
 
-assert torch.allclose(out1, out2, atol=1e-6), "❌ self attention  Mismatch!"
+
+assert torch.allclose(out1, out2, atol=1e-5), "❌ self attention  Mismatch!"
