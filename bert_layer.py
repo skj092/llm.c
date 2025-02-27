@@ -1,11 +1,10 @@
-from os import confstr_names
 import pdb
 import torch
 import numpy as np
 import torch.nn as nn
 from transformers import BertModel
 from bert_dev import (config, BertAttention, BertOutput,
-                      BertIntermediate, bert_base, BertEncoder, BertLayer, BertEmbeddings, BertPooler)
+                      BertIntermediate, bert_base, BertEncoder, BertLayer, BertEmbeddings, BertPooler, generate_random_input)
 
 
 def set_seed(seed):
@@ -30,16 +29,27 @@ class BertModelCustom(nn.Module):
         hf_sd = bert_base.state_dict()
 
         for k in hf_sd.keys():
-            print(f"Copying {k}")
+            # print(f"Copying {k}")
             self.state_dict()[k].copy_(hf_sd[k])
         return self
 
-    def forward(self):
-        pass
+    def forward(self, input_ids):
+        out = self.embeddings(input_ids)
+        out = self.encoder(out)
+        p_out = self.pooler(out)
+        return out, p_out
 
 
-hidden_state = torch.rand(2, 128, 768)
+input_ids, attention_mask, token_type_ids = generate_random_input()
 
 model = BertModelCustom(config).load_from_pretrained()
 model.eval()
-pdb.set_trace()
+out1 = model(input_ids)
+
+out2 = bert_base(input_ids)
+
+
+# for a, b in zip(out1, out2):
+for i in range(len(out1)):
+    assert torch.allclose(out1[i], out2[i], atol=1e-5), f"❌ out Layer  Mismatch!"
+    print(f"matched")
