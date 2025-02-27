@@ -372,3 +372,40 @@ class BertPooler(nn.Module):
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
         return pooled_output
+
+
+class BertModelCustom(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.embeddings = BertEmbeddings(config)
+        self.encoder = BertEncoder(config)
+        self.pooler = BertPooler(config)
+
+    def load_from_pretrained(self):
+        hf_sd = bert_base.state_dict()
+
+        for k in hf_sd.keys():
+            # print(f"Copying {k}")
+            self.state_dict()[k].copy_(hf_sd[k])
+        return self
+
+    def forward(self, input_ids):
+        out = self.embeddings(input_ids)
+        out = self.encoder(out)
+        p_out = self.pooler(out)
+        return out, p_out
+
+
+if __name__ == "__main__":
+    input_ids, attention_mask, token_type_ids = generate_random_input()
+    model = BertModelCustom(config).load_from_pretrained()
+    model.eval()
+    out1 = model(input_ids)
+
+    out2 = bert_base(input_ids)
+
+    # for a, b in zip(out1, out2):
+    for i in range(len(out1)):
+        assert torch.allclose(
+            out1[i], out2[i], atol=1e-5), f"❌ out Layer  Mismatch!"
+        print(f"matched")
