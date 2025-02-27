@@ -36,14 +36,6 @@ class BertConfig:
     type_vocab_size: int = 2
 
 
-config = BertConfig()
-num_classes = 2
-
-# # Load base BERT model first, then create classification model
-bert_base = BertModel.from_pretrained("bert-base-uncased")
-bert_base.eval()
-
-
 class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -289,14 +281,20 @@ class BertModelCustom(nn.Module):
 
 
 if __name__ == "__main__":
+    config = BertConfig()
     input_ids, attention_mask, token_type_ids = generate_random_input()
+
+    # Load base BERT model
+    bert_base = BertModel.from_pretrained("bert-base-uncased")
+    bert_base.eval()
+    out1 = bert_base(input_ids)
+
+    # Custom Model
     model = BertModelCustom(config).load_from_pretrained()
     model.eval()
-    out1 = model(input_ids)
+    out2 = model(input_ids)
 
-    out2 = bert_base(input_ids)
-
-    # for a, b in zip(out1, out2):
+    # validate output
     for i in range(len(out1)):
         assert torch.allclose(
-            out1[i], out2[i], atol=1e-5), f"❌ out Layer  Mismatch!"
+            out1[i], out2[i], atol=1e-5), "❌ out Layer  Mismatch!"
